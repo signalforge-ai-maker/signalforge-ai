@@ -14,6 +14,19 @@ export type ScoredMarketRow = MarketRow & {
   score: number
 }
 
+export type BotAction = "watch" | "paper-long" | "risk-off"
+
+export type BotPlan = {
+  symbol: string
+  action: BotAction
+  confidence: number
+  allocationPercent: number
+  entryPrice: number
+  stopLoss: number
+  takeProfit: number
+  rationale: string
+}
+
 export const fallbackRows: MarketRow[] = [
   { symbol: "BTCUSDT", lastPrice: "64280.12", priceChangePercent: "1.84", quoteVolume: "28500000000", count: 1854000 },
   { symbol: "ETHUSDT", lastPrice: "3182.40", priceChangePercent: "0.92", quoteVolume: "12900000000", count: 1269000 },
@@ -77,6 +90,37 @@ export function buildReason(row: MarketRow, score: number) {
   const direction = change >= 0 ? "upside momentum" : "downside pressure"
   const risk = Math.abs(change) >= 4 ? "elevated volatility" : "moderate volatility"
   return `${direction} with ${formatVolume(row.quoteVolume)} 24h volume. Score ${score}/100; ${risk}.`
+}
+
+export function buildBotPlan(row?: ScoredMarketRow): BotPlan | undefined {
+  if (!row) return undefined
+
+  const change = Number(row.priceChangePercent)
+  const price = Number(row.lastPrice)
+  const confidence = Math.max(0, Math.min(row.score, 100))
+  const highRiskMove = Math.abs(change) >= 5
+  const action: BotAction = highRiskMove ? "risk-off" : confidence >= 68 && change > 0 ? "paper-long" : "watch"
+  const allocationPercent = action === "paper-long" ? Math.min(5, Math.max(1, Math.round(confidence / 20))) : 0
+  const stopLoss = price * (highRiskMove ? 0.96 : 0.97)
+  const takeProfit = price * 1.045
+
+  const rationale =
+    action === "paper-long"
+      ? "Momentum and activity are strong enough for a small simulated long."
+      : action === "risk-off"
+        ? "Volatility is elevated, so the bot avoids opening a new paper position."
+        : "Signal quality is not strong enough; the bot keeps watching."
+
+  return {
+    symbol: row.symbol,
+    action,
+    confidence,
+    allocationPercent,
+    entryPrice: price,
+    stopLoss,
+    takeProfit,
+    rationale
+  }
 }
 
 export async function fetchMarketRows(symbols: string[]): Promise<MarketRow[]> {

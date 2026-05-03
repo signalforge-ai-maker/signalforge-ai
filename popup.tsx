@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 import iconUrl from "data-base64:~../assets/icon-48.png"
 
 import {
+  buildBotPlan,
   buildReason,
   fallbackRows,
   fetchMarketRows,
@@ -19,6 +20,13 @@ import "~src/popup.css"
 
 type RadarState = "Scanning" | "Live scan" | "Demo data"
 
+type PaperPosition = {
+  symbol: string
+  quantity: number
+  entryPrice: number
+  openedAt: string
+}
+
 function getSignalBadge(signal?: MarketRow) {
   if (!signal) return { label: "Neutral", mode: "" }
 
@@ -30,6 +38,21 @@ function getSignalBadge(signal?: MarketRow) {
 
 function formatTime(date: Date) {
   return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+}
+
+function formatUsd(value: number) {
+  const digits = value >= 1000 ? 0 : 2
+
+  return value.toLocaleString("en-US", {
+    maximumFractionDigits: digits,
+    minimumFractionDigits: digits
+  })
+}
+
+function getBotActionLabel(action?: string) {
+  if (action === "paper-long") return "Paper long"
+  if (action === "risk-off") return "Risk-off"
+  return "Watch"
 }
 
 function AssetRow({ row }: { row: MarketRow }) {
@@ -62,7 +85,39 @@ function Popup() {
 
   const symbols = useMemo(() => watchlist.split(","), [watchlist])
   const topSignal = useMemo(() => getTopSignal(rows), [rows])
+  const botPlan = useMemo(() => buildBotPlan(topSignal), [topSignal])
   const badge = getSignalBadge(topSignal)
+  const [paperCash, setPaperCash] = useState(10000)
+  const [paperPosition, setPaperPosition] = useState<PaperPosition | null>(null)
+
+  const currentPositionRow = paperPosition ? rows.find((row) => row.symbol === paperPosition.symbol) : undefined
+  const currentPositionPrice = Number(currentPositionRow?.lastPrice ?? paperPosition?.entryPrice ?? 0)
+  const positionValue = paperPosition ? paperPosition.quantity * currentPositionPrice : 0
+  const positionCost = paperPosition ? paperPosition.quantity * paperPosition.entryPrice : 0
+  const paperPnl = paperPosition ? positionValue - positionCost : 0
+  const equity = paperCash + positionValue
+
+  const openPaperPosition = useCallback(() => {
+    if (!botPlan || botPlan.action !== "paper-long" || paperPosition) return
+
+    const budget = paperCash * (botPlan.allocationPercent / 100)
+    if (budget <= 0 || botPlan.entryPrice <= 0) return
+
+    setPaperCash((cash) => cash - budget)
+    setPaperPosition({
+      symbol: botPlan.symbol,
+      quantity: budget / botPlan.entryPrice,
+      entryPrice: botPlan.entryPrice,
+      openedAt: formatTime(new Date())
+    })
+  }, [botPlan, paperCash, paperPosition])
+
+  const closePaperPosition = useCallback(() => {
+    if (!paperPosition) return
+
+    setPaperCash((cash) => cash + positionValue)
+    setPaperPosition(null)
+  }, [paperPosition, positionValue])
 
   const loadMarketData = useCallback(async () => {
     setRadarState("Scanning")
@@ -162,6 +217,83 @@ function Popup() {
             </>
           ) : (
             <div className="placeholder">Loading market signal...</div>
+          )}
+        </article>
+      </section>
+
+      <section className="bot-panel">
+        <div className="section-heading">
+          <h2>Paper bot</h2>
+          <span className="badge simulation">Simulation</span>
+        </div>
+        <article className="bot-card">
+          {botPlan ? (
+            <>
+              <div className="signal-title">
+                <strong>{formatSymbol(botPlan.symbol)}</strong>
+                <span className={botPlan.action === "risk-off" ? "change down" : "score"}>
+                  {getBotActionLabel(botPlan.action)}
+                </span>
+              </div>
+              <p className="reason">{botPlan.rationale}</p>
+              <div className="bot-grid">
+                <div>
+                  <span>Confidence</span>
+                  <strong>{botPlan.confidence}/100</strong>
+                </div>
+                <div>
+                  <span>Max size</span>
+                  <strong>{botPlan.allocationPercent}%</strong>
+                </div>
+                <div>
+                  <span>Stop</span>
+                  <strong>${formatPrice(String(botPlan.stopLoss))}</strong>
+                </div>
+                <div>
+                  <span>Target</span>
+                  <strong>${formatPrice(String(botPlan.takeProfit))}</strong>
+                </div>
+              </div>
+              <div className="paper-account">
+                <div className="metric-row">
+                  <span>Paper equity</span>
+                  <strong>${formatUsd(equity)}</strong>
+                </div>
+                <div className="metric-row">
+                  <span>Position</span>
+                  <strong>{paperPosition ? formatSymbol(paperPosition.symbol) : "None"}</strong>
+                </div>
+                {paperPosition ? (
+                  <div className="metric-row">
+                    <span>
+                      PnL since {paperPosition.openedAt}
+                    </span>
+                    <strong className={paperPnl >= 0 ? "change up" : "change down"}>
+                      {paperPnl >= 0 ? "+" : ""}${formatUsd(paperPnl)}
+                    </strong>
+                  </div>
+                ) : null}
+              </div>
+              <div className="bot-actions">
+                <button
+                  type="button"
+                  className="action-button"
+                  disabled={botPlan.action !== "paper-long" || Boolean(paperPosition)}
+                  onClick={openPaperPosition}>
+                  Paper buy
+                </button>
+                <button
+                  type="button"
+                  className="action-button secondary"
+                  disabled={!paperPosition}
+                  onClick={closePaperPosition}>
+                  Close
+                </button>
+              </div>
+              <p className="bot-note">No real orders. No API keys stored.</p>
+            </>
+          ) : (
+            <div className="placeholder">Waiting for a bot plan...</div>
           )}
         </article>
       </section>

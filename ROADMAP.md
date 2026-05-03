@@ -67,6 +67,7 @@ Build a production-minded AI crypto market radar while practicing modern full-st
 ### Phase 2: Radar Engine
 
 - Move scoring rules into shared TypeScript modules
+- Add paper trading bot plans before any live exchange integration
 - Add signal categories:
   - momentum
   - volume anomaly
