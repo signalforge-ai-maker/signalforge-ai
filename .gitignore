@@ -1,0 +1,10 @@
+node_modules
+build
+.plasmo
+.parcel-cache
+.env
+.env.local
+*.zip
+.DS_Store
+tsconfig.tsbuildinfo
+popup-preview*.png

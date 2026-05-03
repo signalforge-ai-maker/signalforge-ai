@@ -1,0 +1,37 @@
+{
+  "name": "signalforge-ai",
+  "displayName": "SignalForge AI",
+  "version": "0.1.0",
+  "description": "AI-powered market radar for crypto signals, risk alerts, and trading research.",
+  "scripts": {
+    "dev": "plasmo dev",
+    "build": "plasmo build",
+    "package": "plasmo package",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@plasmohq/storage": "latest",
+    "plasmo": "latest",
+    "react": "^19.2.0",
+    "react-dom": "^19.2.0"
+  },
+  "devDependencies": {
+    "@types/chrome": "latest",
+    "@types/node": "latest",
+    "@types/react": "latest",
+    "@types/react-dom": "latest",
+    "typescript": "latest"
+  },
+  "engines": {
+    "node": ">=20.9.0"
+  },
+  "alias": {
+    "../../src/popup.tsx": "./src/popup.tsx",
+    "../../popup.tsx": "./popup.tsx"
+  },
+  "manifest": {
+    "host_permissions": [
+      "https://api.binance.com/*"
+    ]
+  }
+}
