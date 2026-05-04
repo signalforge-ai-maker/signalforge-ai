@@ -31,7 +31,8 @@
   },
   "manifest": {
     "host_permissions": [
-      "https://api.binance.com/*"
+      "https://api.binance.com/*",
+      "https://api.gdeltproject.org/*"
     ]
   }
 }
