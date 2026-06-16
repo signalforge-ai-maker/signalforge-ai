@@ -93,6 +93,17 @@ function getMaxDrawdownPercent(equityCurve: EquityPoint[]) {
 }
 
 export function runBacktest(rows: KlineRow[], config: BacktestConfig): BacktestResult {
+  if (rows.length < 30 || config.initialCash <= 0) {
+    return {
+      initialCash: config.initialCash,
+      finalEquity: config.initialCash,
+      totalReturnPercent: 0,
+      maxDrawdownPercent: 0,
+      winRatePercent: 0,
+      trades: [],
+      equityCurve: []
+    }
+  }
   let cash = config.initialCash
   let quantity = 0
   let entryPrice = 0
