@@ -2,6 +2,9 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 
 import iconUrl from "data-base64:~../assets/icon-48.png"
 
+import { BacktestPanel } from "~src/BacktestPanel"
+import { languageOptions, normalizeLanguage, t, type Language } from "~src/i18n"
+
 import {
   buildBotPlan,
   buildReason,
@@ -90,6 +93,7 @@ type OrderEvent = {
 }
 
 type PersistedBotState = {
+  language: Language
   watchlist: string
   tradeTarget: string
   klineInterval: KlineInterval
@@ -111,6 +115,13 @@ function getSignalBadge(signal?: MarketRow) {
   return { label: "Neutral", mode: "" }
 }
 
+function getSignalBadgeLabel(language: Language, label: string) {
+  if (language === "en") return label
+  if (label === "High activity") return "高活跃"
+  if (label === "Risk watch") return "风险观察"
+  return "中性"
+}
+
 function getSentimentClass(label?: string) {
   if (label === "Positive") return "positive"
   if (label === "Negative") return "negative"
@@ -130,20 +141,27 @@ function formatUsd(value: number) {
   })
 }
 
-function getBotActionLabel(action?: string) {
-  if (action === "paper-long") return "Paper long"
-  if (action === "risk-off") return "Risk-off"
-  return "Watch"
+function getBotActionLabel(language: Language, action?: string) {
+  if (language === "en") {
+    if (action === "paper-long") return "Paper long"
+    if (action === "risk-off") return "Risk-off"
+    return "Watch"
+  }
+
+  if (action === "paper-long") return "模拟做多"
+  if (action === "risk-off") return "风险回避"
+  return "观察"
 }
 
-function getMarketLabel(marketType: MarketType, leverage: number) {
-  return marketType === "futures" ? `Futures ${leverage}x` : "Spot"
+function getMarketLabel(language: Language, marketType: MarketType, leverage: number) {
+  if (language === "en") return marketType === "futures" ? `Futures ${leverage}x` : "Spot"
+  return marketType === "futures" ? `合约 ${leverage}x` : "现货"
 }
 
-function getExecutionModeLabel(mode: ExecutionMode) {
-  if (mode === "manual-confirm") return "Manual confirm"
-  if (mode === "auto-execute") return "Auto execute"
-  return "Alert only"
+function getExecutionModeLabel(language: Language, mode: ExecutionMode) {
+  if (mode === "manual-confirm") return t(language, "manualConfirm")
+  if (mode === "auto-execute") return t(language, "autoExecute")
+  return language === "zh" ? "只提醒" : "Alert only"
 }
 
 function getRiskCheckClass(status: RiskCheckStatus) {
@@ -183,6 +201,91 @@ function normalizeStrategyType(value?: string): StrategyType {
   }
 
   return "momentum"
+}
+
+function getWatchlistLabel(language: Language, label: string) {
+  if (language === "en") return label
+  if (label === "Core majors") return "核心主流币"
+  if (label === "High beta") return "高波动币种"
+  if (label === "Large cap") return "大市值币种"
+  return label
+}
+
+function getStrategyLabel(language: Language, strategy: StrategyType) {
+  if (language === "en") return strategyOptions.find((option) => option.value === strategy)?.label ?? "Momentum"
+
+  const labels: Record<StrategyType, string> = {
+    momentum: "趋势追踪",
+    reversal: "反转观察",
+    grid: "网格模拟",
+    dca: "分批买入",
+    "scheduled-dca": "定投策略",
+    rebalance: "组合再平衡",
+    "ai-signal": "AI信号策略"
+  }
+
+  return labels[strategy]
+}
+
+function getStrategyDetail(language: Language, strategy: StrategyType) {
+  if (language === "en") return strategyDetails[strategy]
+
+  const details: Record<StrategyType, { description: string; entryBias: string; risk: string }> = {
+    momentum: {
+      description: "当价格、成交量和活跃度同向增强时，跟随已有趋势。",
+      entryBias: "买入强势",
+      risk: "入场太晚可能追到趋势尾部。"
+    },
+    reversal: {
+      description: "观察可控下跌后的潜在反弹机会。",
+      entryBias: "回调买入",
+      risk: "弱反弹可能继续下跌。"
+    },
+    grid: {
+      description: "在价格较平稳、流动性足够时模拟区间交易。",
+      entryBias: "区间底部",
+      risk: "强趋势可能突破网格区间。"
+    },
+    dca: {
+      description: "逐步建立仓位，而不是一次性买入全部金额。",
+      entryBias: "分批积累",
+      risk: "长期下跌会持续占用资金。"
+    },
+    "scheduled-dca": {
+      description: "按固定时间和固定金额模拟买入，不依赖短期择时。",
+      entryBias: "时间驱动",
+      risk: "弱势行情中会持续买入，除非风控阻止。"
+    },
+    rebalance: {
+      description: "根据目标比例，模拟多个资产之间的动态调仓。",
+      entryBias: "比例偏离",
+      risk: "过于频繁再平衡可能造成过度交易。"
+    },
+    "ai-signal": {
+      description: "综合行情、流动性、活跃度、波动率和新闻情绪生成建议。",
+      entryBias: "多因子判断",
+      risk: "输入不完整或滞后时，模型信心也可能出错。"
+    }
+  }
+
+  return details[strategy]
+}
+
+function getSentimentLabel(language: Language, label?: string) {
+  if (language === "en") return label ?? "Offline"
+  if (label === "Positive") return "积极"
+  if (label === "Negative") return "消极"
+  if (label === "Neutral") return "中性"
+  return "离线"
+}
+
+function buildLocalizedReason(language: Language, row: MarketRow, score: number) {
+  if (language === "en") return buildReason(row, score)
+
+  const change = Number(row.priceChangePercent)
+  const direction = change >= 0 ? "上涨动能" : "下行压力"
+  const risk = Math.abs(change) >= 4 ? "波动较高" : "波动适中"
+  return `${direction}，24小时成交额 ${formatVolume(row.quoteVolume)}。评分 ${score}/100；${risk}。`
 }
 
 function AssetRow({ row }: { row: MarketRow }) {
@@ -318,6 +421,7 @@ function CandlestickChart({ indicators, rows }: { indicators: ChartIndicators; r
 
 function Popup() {
   const [storageReady, setStorageReady] = useState(false)
+  const [language, setLanguage] = useState<Language>("en")
   const [watchlist, setWatchlist] = useState<string>(watchlists[0].value)
   const [tradeTarget, setTradeTarget] = useState("auto")
   const [rows, setRows] = useState<MarketRow[]>([])
@@ -351,7 +455,7 @@ function Popup() {
   const symbols = useMemo(() => watchlist.split(","), [watchlist])
   const topSignal = useMemo(() => getTopSignal(rows), [rows])
   const strategySignal = useMemo(() => getTopSignal(rows, botSettings.strategyType), [botSettings.strategyType, rows])
-  const selectedStrategyDetail = strategyDetails[botSettings.strategyType]
+  const localizedStrategyDetail = getStrategyDetail(language, botSettings.strategyType)
   const selectedSignal = useMemo(() => {
     if (tradeTarget === "auto") return strategySignal
 
@@ -378,6 +482,7 @@ function Popup() {
 
     chrome.storage.local.get(STORAGE_KEY, (result) => {
       const saved = result[STORAGE_KEY] as Partial<PersistedBotState> | undefined
+      if (saved?.language) setLanguage(normalizeLanguage(saved.language))
       if (saved?.watchlist) setWatchlist(saved.watchlist)
       if (saved?.tradeTarget) setTradeTarget(saved.tradeTarget)
       if (saved?.klineInterval && klineIntervals.includes(saved.klineInterval)) {
@@ -408,6 +513,7 @@ function Popup() {
     if (!storageReady || !canUseChromeStorage()) return
 
     const state: PersistedBotState = {
+      language,
       watchlist,
       tradeTarget,
       klineInterval,
@@ -419,7 +525,7 @@ function Popup() {
     }
 
     chrome.storage.local.set({ [STORAGE_KEY]: state })
-  }, [botSettings, klineInterval, orderHistory, paperCash, paperPosition, riskSettings, storageReady, tradeTarget, watchlist])
+  }, [botSettings, klineInterval, language, orderHistory, paperCash, paperPosition, riskSettings, storageReady, tradeTarget, watchlist])
 
   const configuredBotPlan = useMemo(() => {
     if (!botPlan) return undefined
@@ -467,8 +573,8 @@ function Popup() {
     if (realizedLossPercent >= riskSettings.dailyMaxLossPercent) {
       return {
         status: "blocked",
-        label: "Blocked",
-        reason: "Daily loss limit reached.",
+        label: language === "zh" ? "已阻止" : "Blocked",
+        reason: language === "zh" ? "已触发每日最大亏损限制。" : "Daily loss limit reached.",
         realizedLossPercent,
         consecutiveLosses
       }
@@ -477,8 +583,8 @@ function Popup() {
     if (consecutiveLosses >= riskSettings.pauseAfterLosses) {
       return {
         status: "blocked",
-        label: "Blocked",
-        reason: "Consecutive loss pause is active.",
+        label: language === "zh" ? "已阻止" : "Blocked",
+        reason: language === "zh" ? "连续亏损暂停已生效。" : "Consecutive loss pause is active.",
         realizedLossPercent,
         consecutiveLosses
       }
@@ -487,8 +593,8 @@ function Popup() {
     if ((configuredBotPlan?.allocationPercent ?? 0) > riskSettings.maxPositionPercent) {
       return {
         status: "blocked",
-        label: "Blocked",
-        reason: "Planned position is above the max position limit.",
+        label: language === "zh" ? "已阻止" : "Blocked",
+        reason: language === "zh" ? "计划仓位超过最大仓位限制。" : "Planned position is above the max position limit.",
         realizedLossPercent,
         consecutiveLosses
       }
@@ -497,8 +603,8 @@ function Popup() {
     if (riskSettings.executionMode === "alert-only") {
       return {
         status: "blocked",
-        label: "Alert only",
-        reason: "Signals are allowed, but order execution is disabled.",
+        label: language === "zh" ? "只提醒" : "Alert only",
+        reason: language === "zh" ? "允许生成信号，但禁止执行订单。" : "Signals are allowed, but order execution is disabled.",
         realizedLossPercent,
         consecutiveLosses
       }
@@ -507,8 +613,8 @@ function Popup() {
     if (riskSettings.executionMode === "manual-confirm") {
       return {
         status: "needs-confirmation",
-        label: "Needs confirmation",
-        reason: "Manual click is required before any paper entry.",
+        label: language === "zh" ? "需要确认" : "Needs confirmation",
+        reason: language === "zh" ? "任何模拟入场前都需要手动点击确认。" : "Manual click is required before any paper entry.",
         realizedLossPercent,
         consecutiveLosses
       }
@@ -516,12 +622,12 @@ function Popup() {
 
     return {
       status: "allowed",
-      label: "Allowed",
-      reason: "Risk limits allow automated paper execution.",
+      label: language === "zh" ? "允许" : "Allowed",
+      reason: language === "zh" ? "当前风控允许自动模拟执行。" : "Risk limits allow automated paper execution.",
       realizedLossPercent,
       consecutiveLosses
     }
-  }, [configuredBotPlan?.allocationPercent, orderHistory, riskSettings])
+  }, [configuredBotPlan?.allocationPercent, language, orderHistory, riskSettings])
 
   const updateBotSetting = useCallback(
     (key: keyof BotSettings, value: number | boolean | MarketType | StrategyType) => {
@@ -657,11 +763,11 @@ function Popup() {
       setRows(fallbackRows)
       setSource("demo")
       setRadarState("Demo data")
-      setError("Live market data is unavailable. Showing demo rows.")
+      setError(t(language, "liveMarketUnavailable"))
     } finally {
       setUpdatedAt(formatTime(new Date()))
     }
-  }, [symbols, tradeTarget])
+  }, [language, symbols, tradeTarget])
 
   useEffect(() => {
     void loadMarketData()
@@ -681,9 +787,9 @@ function Popup() {
       console.warn(caughtError)
       setKlines([])
       setChartState("Error")
-      setChartError("Kline data is unavailable.")
+      setChartError(language === "zh" ? "K线数据不可用。" : "Kline data is unavailable.")
     }
-  }, [chartSymbol, klineInterval])
+  }, [chartSymbol, klineInterval, language])
 
   useEffect(() => {
     void loadKlines()
@@ -704,9 +810,9 @@ function Popup() {
       const fallbackSentiment = buildMarketSentiment(selectedSignal)
       setNewsSentiment(fallbackSentiment)
       setNewsState("Error")
-      setNewsError("News source is offline. Showing market-only fallback.")
+      setNewsError(language === "zh" ? "新闻源离线，正在显示市场备用情绪。" : "News source is offline. Showing market-only fallback.")
     }
-  }, [chartSymbol, selectedSignal])
+  }, [chartSymbol, language, selectedSignal])
 
   useEffect(() => {
     void loadNewsSentiment()
@@ -719,15 +825,26 @@ function Popup() {
           <img src={iconUrl} alt="" className="brand-icon" />
           <div>
             <h1>SignalForge AI</h1>
-            <p>Market radar</p>
+            <p>{t(language, "marketRadar")}</p>
           </div>
         </div>
+        <select
+          className="language-select"
+          aria-label={t(language, "language")}
+          value={language}
+          onChange={(event) => setLanguage(normalizeLanguage(event.target.value))}>
+          {languageOptions.map((option) => (
+            <option key={option.value} value={option.value}>
+              {option.label}
+            </option>
+          ))}
+        </select>
         <button
           id="refreshButton"
           className="icon-button"
           type="button"
-          aria-label="Refresh market data"
-          title="Refresh"
+          aria-label={t(language, "refreshMarketData")}
+          title={t(language, "refreshMarketData")}
           onClick={() => void loadMarketData()}>
           R
         </button>
@@ -735,24 +852,24 @@ function Popup() {
 
       <section className="status-panel" aria-live="polite">
         <div>
-          <span className="label">Radar state</span>
+          <span className="label">{t(language, "radarState")}</span>
           <strong>{radarState}</strong>
         </div>
         <div>
-          <span className="label">Updated</span>
+          <span className="label">{t(language, "updated")}</span>
           <strong>{updatedAt}</strong>
         </div>
       </section>
 
       <section className="controls" aria-label="Watchlist controls">
-        <label htmlFor="symbolSelect">Watchlist</label>
+        <label htmlFor="symbolSelect">{t(language, "watchlist")}</label>
         <select
           id="symbolSelect"
           value={watchlist}
           onChange={(event) => setWatchlist(event.target.value)}>
           {watchlists.map((item) => (
             <option key={item.value} value={item.value}>
-              {item.label}
+              {getWatchlistLabel(language, item.label)}
             </option>
           ))}
         </select>
@@ -760,12 +877,12 @@ function Popup() {
 
       <section className="control-grid" aria-label="Trading mode controls">
         <label htmlFor="tradeTargetSelect">
-          <span>Trade target</span>
+          <span>{t(language, "tradeTarget")}</span>
           <select
             id="tradeTargetSelect"
             value={tradeTarget}
             onChange={(event) => setTradeTarget(event.target.value)}>
-            <option value="auto">Auto top signal</option>
+            <option value="auto">{t(language, "autoTopSignal")}</option>
             {rows.map((row) => (
               <option key={row.symbol} value={row.symbol}>
                 {formatSymbol(row.symbol)}
@@ -774,24 +891,24 @@ function Popup() {
           </select>
         </label>
         <label htmlFor="marketTypeSelect">
-          <span>Market</span>
+          <span>{t(language, "market")}</span>
           <select
             id="marketTypeSelect"
             value={botSettings.marketType}
             onChange={(event) => updateBotSetting("marketType", event.target.value as MarketType)}>
-            <option value="spot">Spot</option>
-            <option value="futures">Futures</option>
+            <option value="spot">{language === "zh" ? "现货" : "Spot"}</option>
+            <option value="futures">{language === "zh" ? "合约" : "Futures"}</option>
           </select>
         </label>
         <label htmlFor="strategyTypeSelect">
-          <span>Strategy</span>
+          <span>{t(language, "strategy")}</span>
           <select
             id="strategyTypeSelect"
             value={botSettings.strategyType}
             onChange={(event) => updateBotSetting("strategyType", event.target.value as StrategyType)}>
             {strategyOptions.map((strategy) => (
               <option key={strategy.value} value={strategy.value}>
-                {strategy.label}
+                {getStrategyLabel(language, strategy.value)}
               </option>
             ))}
           </select>
@@ -800,26 +917,26 @@ function Popup() {
 
       <section className="strategy-detail" aria-label="Strategy detail">
         <div className="strategy-detail-head">
-          <strong>{strategyOptions.find((strategy) => strategy.value === botSettings.strategyType)?.label}</strong>
-          <span>Detail</span>
+          <strong>{getStrategyLabel(language, botSettings.strategyType)}</strong>
+          <span>{t(language, "detail")}</span>
         </div>
-        <p>{selectedStrategyDetail.description}</p>
+        <p>{localizedStrategyDetail.description}</p>
         <div className="strategy-detail-grid">
           <div>
-            <span>Entry bias</span>
-            <strong>{selectedStrategyDetail.entryBias}</strong>
+            <span>{t(language, "entryBias")}</span>
+            <strong>{localizedStrategyDetail.entryBias}</strong>
           </div>
           <div>
-            <span>Risk</span>
-            <strong>{selectedStrategyDetail.risk}</strong>
+            <span>{t(language, "risk")}</span>
+            <strong>{localizedStrategyDetail.risk}</strong>
           </div>
         </div>
       </section>
 
       <section className="signal-panel">
         <div className="section-heading">
-          <h2>Top signal</h2>
-          <span className={`badge ${badge.mode}`}>{badge.label}</span>
+          <h2>{t(language, "topSignal")}</h2>
+          <span className={`badge ${badge.mode}`}>{getSignalBadgeLabel(language, badge.label)}</span>
         </div>
         <article className="signal-card">
           {topSignal ? (
@@ -829,28 +946,28 @@ function Popup() {
                 <span className="score">{topSignal.score}/100</span>
               </div>
               {error ? <p className="error">{error}</p> : null}
-              <p className="reason">{buildReason(topSignal, topSignal.score)}</p>
+              <p className="reason">{buildLocalizedReason(language, topSignal, topSignal.score)}</p>
               <div className="metric-row">
-                <span>24h change</span>
+                <span>{t(language, "twentyFourHourChange")}</span>
                 <strong className={Number(topSignal.priceChangePercent) >= 0 ? "change up" : "change down"}>
                   {Number(topSignal.priceChangePercent) >= 0 ? "+" : ""}
                   {Number(topSignal.priceChangePercent).toFixed(2)}%
                 </strong>
               </div>
               <div className="metric-row">
-                <span>Last price</span>
+                <span>{t(language, "lastPrice")}</span>
                 <strong>${formatPrice(topSignal.lastPrice)}</strong>
               </div>
             </>
           ) : (
-            <div className="placeholder">Loading market signal...</div>
+            <div className="placeholder">{language === "zh" ? "正在加载市场信号..." : "Loading market signal..."}</div>
           )}
         </article>
       </section>
 
       <section className="chart-panel">
         <div className="section-heading">
-          <h2>Kline chart</h2>
+          <h2>{t(language, "klineChart")}</h2>
           <span className="muted">{chartSymbol ? formatSymbol(chartSymbol) : "--"}</span>
         </div>
         <div className="chart-controls" aria-label="Kline interval controls">
@@ -868,16 +985,25 @@ function Popup() {
           <CandlestickChart indicators={chartIndicators} rows={klines} />
         ) : (
           <div className="chart-placeholder">
-            {chartState === "Loading" ? "Loading candles..." : chartError || "No candles yet."}
+            {chartState === "Loading" ? t(language, "candlesLoading") : chartError || t(language, "noCandles")}
           </div>
         )}
       </section>
 
+      <BacktestPanel
+        language={language}
+        rows={klines}
+        strategy={botSettings.strategyType}
+        orderSizePercent={botSettings.orderSizePercent}
+        stopLossPercent={botSettings.stopLossPercent}
+        takeProfitPercent={botSettings.takeProfitPercent}
+      />
+
       <section className="news-panel" aria-label="News sentiment">
         <div className="section-heading">
-          <h2>News sentiment</h2>
+          <h2>{t(language, "newsSentiment")}</h2>
           <span className={`badge sentiment ${getSentimentClass(newsSentiment?.label)}`}>
-            {newsState === "Loading" ? "Scanning" : newsSentiment?.label ?? "Offline"}
+            {newsState === "Loading" ? t(language, "scanning") : getSentimentLabel(language, newsSentiment?.label)}
           </span>
         </div>
         <article className="news-card">
@@ -885,14 +1011,14 @@ function Popup() {
             <>
               <div className="news-score">
                 <div>
-                  <span>{newsSentiment.source === "news" ? "Headline score" : "Market score"}</span>
+                  <span>{newsSentiment.source === "news" ? t(language, "headlineScore") : t(language, "marketScore")}</span>
                   <strong className={getSentimentClass(newsSentiment.label)}>
                     {newsSentiment.score > 0 ? "+" : ""}
                     {newsSentiment.score}
                   </strong>
                 </div>
                 <div>
-                  <span>{newsSentiment.source === "news" ? "Sources" : "Fallback"}</span>
+                  <span>{newsSentiment.source === "news" ? t(language, "sources") : t(language, "fallback")}</span>
                   <strong>{newsSentiment.articles.length}</strong>
                 </div>
               </div>
@@ -910,29 +1036,29 @@ function Popup() {
               {newsState === "Error" ? <p className="news-warning">{newsError}</p> : null}
             </>
           ) : (
-            <p className="placeholder">{newsState === "Loading" ? "Scanning recent headlines..." : newsError}</p>
+            <p className="placeholder">{newsState === "Loading" ? t(language, "scanningHeadlines") : newsError}</p>
           )}
         </article>
       </section>
 
       <section className="risk-panel" aria-label="Pre-trade risk controls">
         <div className="section-heading">
-          <h2>Risk controls</h2>
-          <span className="badge locked">Pre-trade</span>
+          <h2>{t(language, "riskControls")}</h2>
+          <span className="badge locked">{t(language, "preTrade")}</span>
         </div>
         <article className="risk-card">
           <div className="risk-mode-row">
             <div>
-              <span>Execution mode</span>
-              <strong>{getExecutionModeLabel(riskSettings.executionMode)}</strong>
+              <span>{t(language, "executionMode")}</span>
+              <strong>{getExecutionModeLabel(language, riskSettings.executionMode)}</strong>
             </div>
-            <span className="risk-lock">Real trading locked</span>
+            <span className="risk-lock">{t(language, "realTradingLocked")}</span>
           </div>
           <div className="mode-selector" aria-label="Execution mode">
             {[
-              { label: "Alert only", value: "alert-only" },
-              { label: "Manual confirm", value: "manual-confirm" },
-              { label: "Auto execute", value: "auto-execute" }
+              { label: language === "zh" ? "只提醒" : "Alert only", value: "alert-only" },
+              { label: t(language, "manualConfirm"), value: "manual-confirm" },
+              { label: t(language, "autoExecute"), value: "auto-execute" }
             ].map((mode) => (
               <button
                 key={mode.value}
@@ -945,7 +1071,7 @@ function Popup() {
           </div>
           <div className="risk-grid">
             <label>
-              <span>Daily max loss %</span>
+              <span>{language === "zh" ? "每日最大亏损 %" : "Daily max loss %"}</span>
               <input
                 type="number"
                 min="0.5"
@@ -956,7 +1082,7 @@ function Popup() {
               />
             </label>
             <label>
-              <span>Max position %</span>
+              <span>{t(language, "maxPosition")}</span>
               <input
                 type="number"
                 min="1"
@@ -967,7 +1093,7 @@ function Popup() {
               />
             </label>
             <label>
-              <span>Pause after losses</span>
+              <span>{t(language, "pauseAfterLosses")}</span>
               <input
                 type="number"
                 min="1"
@@ -979,21 +1105,22 @@ function Popup() {
             </label>
           </div>
           <div className="risk-summary">
-            <span>Gate rule</span>
+            <span>{t(language, "gateRule")}</span>
             <strong>
-              Stop new orders at -{riskSettings.dailyMaxLossPercent}% daily PnL, cap each position at {riskSettings.maxPositionPercent}%,
-              pause after {riskSettings.pauseAfterLosses} losing trades.
+              {language === "zh"
+                ? `每日亏损达到 -${riskSettings.dailyMaxLossPercent}% 时停止新订单，单笔仓位不超过 ${riskSettings.maxPositionPercent}%，连续 ${riskSettings.pauseAfterLosses} 笔亏损后暂停。`
+                : `Stop new orders at -${riskSettings.dailyMaxLossPercent}% daily PnL, cap each position at ${riskSettings.maxPositionPercent}%, pause after ${riskSettings.pauseAfterLosses} losing trades.`}
             </strong>
           </div>
           <div className={`risk-check ${getRiskCheckClass(riskCheck.status)}`}>
             <div>
-              <span>Pre-trade check</span>
+              <span>{t(language, "preTradeCheck")}</span>
               <strong>{riskCheck.label}</strong>
             </div>
             <p>{riskCheck.reason}</p>
             <div className="risk-check-metrics">
-              <span>Loss {riskCheck.realizedLossPercent.toFixed(2)}%</span>
-              <span>Streak {riskCheck.consecutiveLosses}</span>
+              <span>{language === "zh" ? "亏损" : "Loss"} {riskCheck.realizedLossPercent.toFixed(2)}%</span>
+              <span>{t(language, "streak")} {riskCheck.consecutiveLosses}</span>
             </div>
           </div>
         </article>
@@ -1001,8 +1128,8 @@ function Popup() {
 
       <section className="bot-panel">
         <div className="section-heading">
-          <h2>Paper bot</h2>
-          <span className="badge simulation">Simulation</span>
+          <h2>{t(language, "paperBot")}</h2>
+          <span className="badge simulation">{t(language, "simulation")}</span>
         </div>
         <article className="bot-card">
           {configuredBotPlan ? (
@@ -1010,29 +1137,29 @@ function Popup() {
               <div className="signal-title">
                 <strong>{formatSymbol(configuredBotPlan.symbol)}</strong>
                 <span className={configuredBotPlan.action === "risk-off" ? "change down" : "score"}>
-                  {getBotActionLabel(configuredBotPlan.action)}
+                  {getBotActionLabel(language, configuredBotPlan.action)}
                 </span>
               </div>
               <div className="strategy-strip">
-                <span>Strategy</span>
-                <strong>{configuredBotPlan.strategyName}</strong>
+                <span>{t(language, "strategy")}</span>
+                <strong>{getStrategyLabel(language, configuredBotPlan.strategy)}</strong>
               </div>
               <p className="reason">{configuredBotPlan.rationale}</p>
               <div className="bot-grid">
                 <div>
-                  <span>Confidence</span>
+                  <span>{t(language, "confidence")}</span>
                   <strong>{configuredBotPlan.confidence}/100</strong>
                 </div>
                 <div>
-                  <span>Order size</span>
+                  <span>{t(language, "orderSize")}</span>
                   <strong>{configuredBotPlan.allocationPercent}%</strong>
                 </div>
                 <div>
-                  <span>Stop</span>
+                  <span>{t(language, "stop")}</span>
                   <strong>${formatPrice(String(configuredBotPlan.stopLoss))}</strong>
                 </div>
                 <div>
-                  <span>Target</span>
+                  <span>{t(language, "target")}</span>
                   <strong>${formatPrice(String(configuredBotPlan.takeProfit))}</strong>
                 </div>
               </div>
@@ -1062,7 +1189,7 @@ function Popup() {
                   />
                 </label>
                 <label>
-                  <span>Stop %</span>
+                  <span>{t(language, "stopPercent")}</span>
                   <input
                     type="number"
                     min="0.5"
@@ -1073,7 +1200,7 @@ function Popup() {
                   />
                 </label>
                 <label>
-                  <span>Target %</span>
+                  <span>{t(language, "targetPercent")}</span>
                   <input
                     type="number"
                     min="0.5"
@@ -1094,25 +1221,25 @@ function Popup() {
               </div>
               <div className="paper-account">
                 <div className="metric-row">
-                  <span>Paper equity</span>
+                  <span>{t(language, "paperEquity")}</span>
                   <strong>${formatUsd(equity)}</strong>
                 </div>
                 <div className="metric-row">
-                  <span>Market</span>
-                  <strong>{getMarketLabel(botSettings.marketType, botSettings.leverage)}</strong>
+                  <span>{t(language, "market")}</span>
+                  <strong>{getMarketLabel(language, botSettings.marketType, botSettings.leverage)}</strong>
                 </div>
                 <div className="metric-row">
-                  <span>Position</span>
+                  <span>{t(language, "position")}</span>
                   <strong>
                     {paperPosition
-                      ? `${formatSymbol(paperPosition.symbol)} ${getMarketLabel(paperPosition.marketType, paperPosition.leverage)}`
-                      : "None"}
+                      ? `${formatSymbol(paperPosition.symbol)} ${getMarketLabel(language, paperPosition.marketType, paperPosition.leverage)}`
+                      : language === "zh" ? "无" : "None"}
                   </strong>
                 </div>
                 {paperPosition ? (
                   <div className="metric-row">
                     <span>
-                      PnL since {paperPosition.openedAt}
+                      {language === "zh" ? `${paperPosition.openedAt} 后盈亏` : `PnL since ${paperPosition.openedAt}`}
                     </span>
                     <strong className={paperPnl >= 0 ? "change up" : "change down"}>
                       {paperPnl >= 0 ? "+" : ""}${formatUsd(paperPnl)}
@@ -1121,7 +1248,7 @@ function Popup() {
                 ) : null}
                 {paperPosition ? (
                   <div className="metric-row">
-                    <span>Exit guard</span>
+                    <span>{t(language, "exitGuard")}</span>
                     <strong>
                       ${formatPrice(String(paperPosition.stopLoss))} / ${formatPrice(String(paperPosition.takeProfit))}
                     </strong>
@@ -1134,37 +1261,37 @@ function Popup() {
                   className="action-button"
                   disabled={configuredBotPlan.action !== "paper-long" || Boolean(paperPosition) || riskCheck.status === "blocked"}
                   onClick={() => openPaperPosition()}>
-                  Paper buy
+                  {t(language, "paperBuy")}
                 </button>
                 <button
                   type="button"
                   className="action-button secondary"
                   disabled={!paperPosition}
                   onClick={() => closePaperPosition()}>
-                  Close
+                  {t(language, "close")}
                 </button>
               </div>
-              <p className="bot-note">No real orders. No API keys stored.</p>
+              <p className="bot-note">{t(language, "noRealOrders")}</p>
             </>
           ) : (
-            <div className="placeholder">Waiting for a bot plan...</div>
+            <div className="placeholder">{t(language, "waitingBotPlan")}</div>
           )}
         </article>
       </section>
 
       <section>
         <div className="section-heading">
-          <h2>Order history</h2>
-          <span className="muted">{orderHistory.length} events</span>
+          <h2>{t(language, "orderHistory")}</h2>
+          <span className="muted">{orderHistory.length} {language === "zh" ? "条记录" : "events"}</span>
         </div>
         <div className="history-list">
           {orderHistory.length ? (
             orderHistory.map((order) => (
               <article key={order.id} className="history-row">
                 <div>
-                  <strong>{order.side === "open" ? "Open" : "Close"} {formatSymbol(order.symbol)}</strong>
-                  <span>{order.reason} at {order.timestamp}</span>
-                  <span>{getMarketLabel(order.marketType, order.leverage)}</span>
+                  <strong>{order.side === "open" ? language === "zh" ? "开仓" : "Open" : language === "zh" ? "平仓" : "Close"} {formatSymbol(order.symbol)}</strong>
+                  <span>{order.reason} {language === "zh" ? "时间" : "at"} {order.timestamp}</span>
+                  <span>{getMarketLabel(language, order.marketType, order.leverage)}</span>
                 </div>
                 <div>
                   <strong>${formatPrice(String(order.price))}</strong>
@@ -1175,15 +1302,15 @@ function Popup() {
               </article>
             ))
           ) : (
-            <div className="empty-history">No paper orders yet.</div>
+            <div className="empty-history">{t(language, "noPaperOrders")}</div>
           )}
         </div>
       </section>
 
       <section>
         <div className="section-heading">
-          <h2>Market scan</h2>
-          <span className="muted">{rows.length} assets</span>
+          <h2>{t(language, "marketScan")}</h2>
+          <span className="muted">{rows.length} {language === "zh" ? "个资产" : "assets"}</span>
         </div>
         <div className="asset-list">
           {rows.map((row) => (
@@ -1193,7 +1320,7 @@ function Popup() {
       </section>
 
       <footer className="footnote">
-        Research tool only. Signals are not financial advice. Saved locally. {source === "demo" ? "Demo data active." : ""}
+        {t(language, "researchFootnote")} {source === "demo" ? t(language, "demoDataActive") : ""}
       </footer>
     </main>
   )
