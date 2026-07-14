@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react"
 
 import iconUrl from "data-base64:~../assets/icon-48.png"
 
+import { AlertPanel } from "~src/AlertPanel"
 import { BacktestPanel } from "~src/BacktestPanel"
 import { languageOptions, normalizeLanguage, t, type Language } from "~src/i18n"
 
@@ -1125,6 +1126,12 @@ function Popup() {
           </div>
         </article>
       </section>
+
+      <AlertPanel
+        language={language}
+        rows={rows}
+        strategy={botSettings.strategyType}
+      />
 
       <section className="bot-panel">
         <div className="section-heading">

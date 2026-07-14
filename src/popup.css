@@ -1071,3 +1071,87 @@ h2 {
   color: var(--muted);
   font-size: 11px;
 }
+
+.alert-card {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.alert-form {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+
+.alert-form label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.alert-form label span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.alert-form label:nth-child(3),
+.alert-form button {
+  grid-column: 1 / -1;
+}
+
+.alert-list,
+.alert-events {
+  display: grid;
+  gap: 7px;
+}
+
+.alert-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 8px;
+  border: 1px solid rgba(143, 165, 179, 0.14);
+  border-radius: 8px;
+  background: rgba(17, 35, 49, 0.66);
+}
+
+.alert-row.triggered {
+  border-color: rgba(67, 232, 141, 0.42);
+  background: rgba(67, 232, 141, 0.08);
+}
+
+.alert-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.alert-row span,
+.alert-event span,
+.alert-events > strong {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.alert-row button {
+  padding: 4px 7px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+  font-size: 10px;
+}
+
+.alert-event {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 0;
+  border-top: 1px solid rgba(143, 165, 179, 0.14);
+}
