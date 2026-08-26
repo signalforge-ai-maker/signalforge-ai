@@ -1155,3 +1155,82 @@ h2 {
   padding: 7px 0;
   border-top: 1px solid rgba(143, 165, 179, 0.14);
 }
+
+.journal-card {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.journal-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+}
+
+.journal-grid div,
+.journal-row {
+  padding: 8px;
+  border: 1px solid rgba(143, 165, 179, 0.14);
+  border-radius: 8px;
+  background: rgba(17, 35, 49, 0.66);
+}
+
+.journal-grid div {
+  display: grid;
+  gap: 3px;
+}
+
+.journal-grid span,
+.journal-note span,
+.journal-row span {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.journal-grid strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.journal-note {
+  display: grid;
+  gap: 6px;
+}
+
+.journal-note textarea {
+  width: 100%;
+  min-height: 72px;
+  padding: 8px;
+  resize: vertical;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.journal-list {
+  display: grid;
+  gap: 7px;
+}
+
+.journal-row {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.journal-row div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+}
+
+.journal-row div:last-child {
+  text-align: right;
+}
