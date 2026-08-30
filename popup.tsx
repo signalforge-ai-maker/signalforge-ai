@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import iconUrl from "data-base64:~../assets/icon-48.png";
 
+import { PortfolioPanel } from "~src/PortfolioPanel";
 import { AlertPanel } from "~src/AlertPanel";
 import { BacktestPanel } from "~src/BacktestPanel";
 import { TradeJournalPanel } from "~src/TradeJournalPanel";
@@ -1257,6 +1258,15 @@ function Popup() {
           )}
         </article>
       </section>
+
+      <PortfolioPanel
+        language={language}
+        cash={paperCash}
+        position={paperPosition}
+        positionValue={positionValue}
+        currentPrice={currentPositionPrice}
+        pnl={paperPnl}
+      />
 
       <section className="chart-panel">
         <div className="section-heading">

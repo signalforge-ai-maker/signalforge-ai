@@ -1234,3 +1234,94 @@ h2 {
 .journal-row div:last-child {
   text-align: right;
 }
+
+.portfolio-card {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.portfolio-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+}
+
+.portfolio-grid div,
+.portfolio-position div {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(143, 165, 179, 0.14);
+  border-radius: 8px;
+  background: rgba(17, 35, 49, 0.66);
+}
+
+.portfolio-grid span,
+.portfolio-position span,
+.allocation-heading span,
+.allocation-legend {
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.portfolio-grid strong,
+.portfolio-position strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.allocation-block {
+  display: grid;
+  gap: 7px;
+}
+
+.allocation-heading,
+.allocation-legend {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.allocation-bar {
+  display: flex;
+  overflow: hidden;
+  height: 10px;
+  border: 1px solid rgba(143, 165, 179, 0.18);
+  border-radius: 999px;
+  background: rgba(143, 165, 179, 0.12);
+}
+
+.allocation-cash {
+  display: block;
+  background: var(--muted);
+}
+
+.allocation-position {
+  display: block;
+  background: var(--cyan);
+}
+
+.portfolio-position {
+  display: grid;
+  gap: 7px;
+}
+
+.status-pill.low {
+  color: var(--green);
+  background: rgba(67, 232, 141, 0.12);
+}
+
+.status-pill.medium {
+  color: var(--amber);
+  background: rgba(255, 207, 92, 0.14);
+}
+
+.status-pill.high {
+  color: var(--red);
+  background: rgba(255, 113, 137, 0.14);
+}
