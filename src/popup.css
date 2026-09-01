@@ -1325,3 +1325,66 @@ h2 {
   color: var(--red);
   background: rgba(255, 113, 137, 0.14);
 }
+
+.position-sizing-card {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.position-sizing-main,
+.position-sizing-result {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 7px;
+}
+
+.position-sizing-main div,
+.position-sizing-result div,
+.position-risk-input {
+  display: grid;
+  gap: 3px;
+  min-width: 0;
+  padding: 8px;
+  border: 1px solid rgba(143, 165, 179, 0.14);
+  border-radius: 8px;
+  background: rgba(17, 35, 49, 0.66);
+}
+
+.position-sizing-main span,
+.position-sizing-result span,
+.position-risk-input span {
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.position-sizing-main strong,
+.position-sizing-result strong {
+  overflow-wrap: anywhere;
+  font-size: 12px;
+}
+
+.position-risk-input input {
+  width: 100%;
+  padding: 6px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-weight: 800;
+}
+
+.position-sizing-note {
+  padding: 9px;
+  border: 1px solid rgba(255, 207, 92, 0.28);
+  border-radius: 8px;
+  background: rgba(255, 207, 92, 0.07);
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}

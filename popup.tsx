@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 
 import iconUrl from "data-base64:~../assets/icon-48.png";
 
+import { PositionSizingPanel } from "~src/PositionSizingPanel";
 import { PortfolioPanel } from "~src/PortfolioPanel";
 import { AlertPanel } from "~src/AlertPanel";
 import { BacktestPanel } from "~src/BacktestPanel";
@@ -1501,6 +1502,17 @@ function Popup() {
         rows={rows}
         strategy={botSettings.strategyType}
       />
+
+      {configuredBotPlan ? (
+        <PositionSizingPanel
+          language={language}
+          symbol={configuredBotPlan.symbol}
+          equity={equity}
+          entryPrice={configuredBotPlan.entryPrice}
+          stopLossPrice={configuredBotPlan.stopLoss}
+          maxPositionPercent={riskSettings.maxPositionPercent}
+        />
+      ) : null}
 
       <section className="bot-panel">
         <div className="section-heading">
