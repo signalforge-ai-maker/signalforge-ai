@@ -1,8 +1,11 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import iconUrl from "data-base64:~../assets/icon-48.png";
 
-import { PositionSizingPanel } from "~src/PositionSizingPanel";
+import {
+  calculatePositionSize,
+  PositionSizingPanel,
+} from "~src/PositionSizingPanel";
 import { PortfolioPanel } from "~src/PortfolioPanel";
 import { AlertPanel } from "~src/AlertPanel";
 import { BacktestPanel } from "~src/BacktestPanel";
@@ -46,6 +49,7 @@ import "~src/popup.css";
 type RadarState = "Scanning" | "Live scan" | "Demo data";
 type ChartState = "Loading" | "Ready" | "Demo" | "Error";
 type NewsState = "Loading" | "Ready" | "Error";
+type AppPage = "radar" | "trade" | "research" | "settings";
 
 type PaperPosition = {
   symbol: string;
@@ -182,6 +186,40 @@ function getRiskCheckClass(status: RiskCheckStatus) {
   if (status === "allowed") return "allowed";
   if (status === "needs-confirmation") return "confirm";
   return "blocked";
+}
+
+function getPageLabel(language: Language, page: AppPage) {
+  const labels: Record<AppPage, { en: string; zh: string }> = {
+    radar: { en: "Radar", zh: "行情" },
+    trade: { en: "Trade", zh: "交易" },
+    research: { en: "Research", zh: "研究" },
+    settings: { en: "Settings", zh: "设置" },
+  };
+
+  return labels[page][language];
+}
+
+function getPageDescription(language: Language, page: AppPage) {
+  const descriptions: Record<AppPage, { en: string; zh: string }> = {
+    radar: {
+      en: "Live market intelligence",
+      zh: "实时市场情报",
+    },
+    trade: {
+      en: "Paper execution workspace",
+      zh: "模拟交易工作台",
+    },
+    research: {
+      en: "Strategy testing and review",
+      zh: "策略测试与复盘",
+    },
+    settings: {
+      en: "Workspace preferences",
+      zh: "工作区偏好设置",
+    },
+  };
+
+  return descriptions[page][language];
 }
 
 function normalizeExecutionMode(value?: string): ExecutionMode {
@@ -540,6 +578,8 @@ function CandlestickChart({
 }
 
 function Popup() {
+  const pageScrollRef = useRef<HTMLDivElement>(null);
+  const [activePage, setActivePage] = useState<AppPage>("radar");
   const [storageReady, setStorageReady] = useState(false);
   const [language, setLanguage] = useState<Language>("en");
   const [watchlist, setWatchlist] = useState<string>(watchlists[0].value);
@@ -599,6 +639,7 @@ function Popup() {
   );
   const badge = getSignalBadge(topSignal);
   const [paperCash, setPaperCash] = useState(10000);
+  const [positionRiskPercent, setPositionRiskPercent] = useState(1);
   const [paperPosition, setPaperPosition] = useState<PaperPosition | null>(
     null,
   );
@@ -725,6 +766,30 @@ function Popup() {
     : 0;
   const paperPnl = paperPosition ? positionValue - positionCost : 0;
   const equity = paperCash + positionValue;
+  const positionSizing = useMemo(() => {
+    if (!configuredBotPlan) {
+      return calculatePositionSize(
+        equity,
+        0,
+        0,
+        positionRiskPercent,
+        riskSettings.maxPositionPercent,
+      );
+    }
+
+    return calculatePositionSize(
+      equity,
+      configuredBotPlan.entryPrice,
+      configuredBotPlan.stopLoss,
+      positionRiskPercent,
+      riskSettings.maxPositionPercent,
+    );
+  }, [
+    configuredBotPlan,
+    equity,
+    positionRiskPercent,
+    riskSettings.maxPositionPercent,
+  ]);
   const stopLossPrice = paperPosition?.stopLoss ?? 0;
   const takeProfitPrice = paperPosition?.takeProfit ?? 0;
   const riskCheck = useMemo<RiskCheck>(() => {
@@ -896,8 +961,19 @@ function Popup() {
       if (riskCheck.status === "blocked") return;
       if (source === "auto" && riskCheck.status !== "allowed") return;
 
-      const budget = paperCash * (configuredBotPlan.allocationPercent / 100);
-      if (budget <= 0 || configuredBotPlan.entryPrice <= 0) return;
+      if (positionSizing.isBlocked) return;
+
+      const budget = positionSizing.positionValue;
+      const quantity = positionSizing.quantity;
+
+      if (
+        budget <= 0 ||
+        quantity <= 0 ||
+        budget > paperCash ||
+        configuredBotPlan.entryPrice <= 0
+      ) {
+        return;
+      }
 
       setPaperCash((cash) => cash - budget);
       setPaperPosition({
@@ -905,7 +981,7 @@ function Popup() {
         marketType: botSettings.marketType,
         leverage:
           botSettings.marketType === "futures" ? botSettings.leverage : 1,
-        quantity: budget / configuredBotPlan.entryPrice,
+        quantity,
         entryPrice: configuredBotPlan.entryPrice,
         stopLoss: configuredBotPlan.stopLoss,
         takeProfit: configuredBotPlan.takeProfit,
@@ -1080,6 +1156,10 @@ function Popup() {
     void loadNewsSentiment();
   }, [loadNewsSentiment]);
 
+  useEffect(() => {
+    pageScrollRef.current?.scrollTo({ top: 0 });
+  }, [activePage]);
+
   return (
     <main className="shell">
       <header className="topbar">
@@ -1087,23 +1167,9 @@ function Popup() {
           <img src={iconUrl} alt="" className="brand-icon" />
           <div>
             <h1>SignalForge AI</h1>
-            <p>{t(language, "marketRadar")}</p>
+            <p>{getPageDescription(language, activePage)}</p>
           </div>
         </div>
-        <select
-          className="language-select"
-          aria-label={t(language, "language")}
-          value={language}
-          onChange={(event) =>
-            setLanguage(normalizeLanguage(event.target.value))
-          }
-        >
-          {languageOptions.map((option) => (
-            <option key={option.value} value={option.value}>
-              {option.label}
-            </option>
-          ))}
-        </select>
         <button
           id="refreshButton"
           className="icon-button"
@@ -1112,11 +1178,16 @@ function Popup() {
           title={t(language, "refreshMarketData")}
           onClick={() => void loadMarketData()}
         >
-          R
+          ↻
         </button>
       </header>
 
-      <section className="status-panel" aria-live="polite">
+      <div ref={pageScrollRef} className="page-scroll">
+      <section
+        className="status-panel"
+        aria-live="polite"
+        hidden={activePage !== "radar"}
+      >
         <div>
           <span className="label">{t(language, "radarState")}</span>
           <strong>{radarState}</strong>
@@ -1127,7 +1198,11 @@ function Popup() {
         </div>
       </section>
 
-      <section className="controls" aria-label="Watchlist controls">
+      <section
+        className="controls"
+        aria-label="Watchlist controls"
+        hidden={activePage !== "radar"}
+      >
         <label htmlFor="symbolSelect">{t(language, "watchlist")}</label>
         <select
           id="symbolSelect"
@@ -1142,7 +1217,11 @@ function Popup() {
         </select>
       </section>
 
-      <section className="control-grid" aria-label="Trading mode controls">
+      <section
+        className="control-grid"
+        aria-label="Trading mode controls"
+        hidden={activePage !== "trade"}
+      >
         <label htmlFor="tradeTargetSelect">
           <span>{t(language, "tradeTarget")}</span>
           <select
@@ -1194,7 +1273,11 @@ function Popup() {
         </label>
       </section>
 
-      <section className="strategy-detail" aria-label="Strategy detail">
+      <section
+        className="strategy-detail"
+        aria-label="Strategy detail"
+        hidden={activePage !== "trade"}
+      >
         <div className="strategy-detail-head">
           <strong>
             {getStrategyLabel(language, botSettings.strategyType)}
@@ -1214,7 +1297,7 @@ function Popup() {
         </div>
       </section>
 
-      <section className="signal-panel">
+      <section className="signal-panel" hidden={activePage !== "radar"}>
         <div className="section-heading">
           <h2>{t(language, "topSignal")}</h2>
           <span className={`badge ${badge.mode}`}>
@@ -1260,16 +1343,18 @@ function Popup() {
         </article>
       </section>
 
-      <PortfolioPanel
-        language={language}
-        cash={paperCash}
-        position={paperPosition}
-        positionValue={positionValue}
-        currentPrice={currentPositionPrice}
-        pnl={paperPnl}
-      />
+      <div hidden={activePage !== "trade"}>
+        <PortfolioPanel
+          language={language}
+          cash={paperCash}
+          position={paperPosition}
+          positionValue={positionValue}
+          currentPrice={currentPositionPrice}
+          pnl={paperPnl}
+        />
+      </div>
 
-      <section className="chart-panel">
+      <section className="chart-panel" hidden={activePage !== "radar"}>
         <div className="section-heading">
           <h2>{t(language, "klineChart")}</h2>
           <span className="muted">
@@ -1299,16 +1384,22 @@ function Popup() {
         )}
       </section>
 
-      <BacktestPanel
-        language={language}
-        rows={klines}
-        strategy={botSettings.strategyType}
-        orderSizePercent={botSettings.orderSizePercent}
-        stopLossPercent={botSettings.stopLossPercent}
-        takeProfitPercent={botSettings.takeProfitPercent}
-      />
+      <div hidden={activePage !== "research"}>
+        <BacktestPanel
+          language={language}
+          rows={klines}
+          strategy={botSettings.strategyType}
+          orderSizePercent={botSettings.orderSizePercent}
+          stopLossPercent={botSettings.stopLossPercent}
+          takeProfitPercent={botSettings.takeProfitPercent}
+        />
+      </div>
 
-      <section className="news-panel" aria-label="News sentiment">
+      <section
+        className="news-panel"
+        aria-label="News sentiment"
+        hidden={activePage !== "radar"}
+      >
         <div className="section-heading">
           <h2>{t(language, "newsSentiment")}</h2>
           <span
@@ -1373,7 +1464,11 @@ function Popup() {
         </article>
       </section>
 
-      <section className="risk-panel" aria-label="Pre-trade risk controls">
+      <section
+        className="risk-panel"
+        aria-label="Pre-trade risk controls"
+        hidden={activePage !== "trade"}
+      >
         <div className="section-heading">
           <h2>{t(language, "riskControls")}</h2>
           <span className="badge locked">{t(language, "preTrade")}</span>
@@ -1497,13 +1592,15 @@ function Popup() {
         </article>
       </section>
 
-      <AlertPanel
-        language={language}
-        rows={rows}
-        strategy={botSettings.strategyType}
-      />
+      <div hidden={activePage !== "radar"}>
+        <AlertPanel
+          language={language}
+          rows={rows}
+          strategy={botSettings.strategyType}
+        />
+      </div>
 
-      {configuredBotPlan ? (
+      {activePage === "trade" && configuredBotPlan ? (
         <PositionSizingPanel
           language={language}
           symbol={configuredBotPlan.symbol}
@@ -1511,10 +1608,12 @@ function Popup() {
           entryPrice={configuredBotPlan.entryPrice}
           stopLossPrice={configuredBotPlan.stopLoss}
           maxPositionPercent={riskSettings.maxPositionPercent}
+          riskPercent={positionRiskPercent}
+          onRiskPercentChange={setPositionRiskPercent}
         />
       ) : null}
 
-      <section className="bot-panel">
+      <section className="bot-panel" hidden={activePage !== "trade"}>
         <div className="section-heading">
           <h2>{t(language, "paperBot")}</h2>
           <span className="badge simulation">{t(language, "simulation")}</span>
@@ -1694,7 +1793,9 @@ function Popup() {
                   disabled={
                     configuredBotPlan.action !== "paper-long" ||
                     Boolean(paperPosition) ||
-                    riskCheck.status === "blocked"
+                    riskCheck.status === "blocked" ||
+                    positionSizing.isBlocked ||
+                    positionSizing.quantity <= 0
                   }
                   onClick={() => openPaperPosition()}
                 >
@@ -1717,7 +1818,7 @@ function Popup() {
         </article>
       </section>
 
-      <section>
+      <section hidden={activePage !== "trade"}>
         <div className="section-heading">
           <h2>{t(language, "orderHistory")}</h2>
           <span className="muted">
@@ -1769,13 +1870,15 @@ function Popup() {
         </div>
       </section>
 
-      <TradeJournalPanel
-        language={language}
-        orders={orderHistory}
-        strategy={botSettings.strategyType}
-      />
+      <div hidden={activePage !== "research"}>
+        <TradeJournalPanel
+          language={language}
+          orders={orderHistory}
+          strategy={botSettings.strategyType}
+        />
+      </div>
 
-      <section>
+      <section hidden={activePage !== "radar"}>
         <div className="section-heading">
           <h2>{t(language, "marketScan")}</h2>
           <span className="muted">
@@ -1789,10 +1892,200 @@ function Popup() {
         </div>
       </section>
 
-      <footer className="footnote">
+      <section
+        className="settings-page"
+        aria-label={getPageLabel(language, "settings")}
+        hidden={activePage !== "settings"}
+      >
+        <div className="page-title-block">
+          <span>{language === "zh" ? "工作区" : "Workspace"}</span>
+          <h2>{language === "zh" ? "偏好设置" : "Preferences"}</h2>
+          <p>
+            {language === "zh"
+              ? "管理界面语言、默认交易环境与行情数据偏好。"
+              : "Manage language, default trading context, and market data preferences."}
+          </p>
+        </div>
+
+        <article className="settings-card">
+          <div className="settings-card-heading">
+            <strong>{language === "zh" ? "界面" : "Interface"}</strong>
+            <span>{language === "zh" ? "显示偏好" : "Display preferences"}</span>
+          </div>
+          <label className="settings-row">
+            <span>
+              <strong>{t(language, "language")}</strong>
+              <small>
+                {language === "zh" ? "应用显示语言" : "Application language"}
+              </small>
+            </span>
+            <select
+              className="settings-select"
+              aria-label={t(language, "language")}
+              value={language}
+              onChange={(event) =>
+                setLanguage(normalizeLanguage(event.target.value))
+              }
+            >
+              {languageOptions.map((option) => (
+                <option key={option.value} value={option.value}>
+                  {option.label}
+                </option>
+              ))}
+            </select>
+          </label>
+        </article>
+
+        <article className="settings-card">
+          <div className="settings-card-heading">
+            <strong>{language === "zh" ? "交易默认值" : "Trading defaults"}</strong>
+            <span>
+              {language === "zh" ? "用于雷达和模拟交易" : "Used by radar and paper trading"}
+            </span>
+          </div>
+          <label className="settings-field">
+            <span>{t(language, "watchlist")}</span>
+            <select
+              value={watchlist}
+              onChange={(event) => setWatchlist(event.target.value)}
+            >
+              {watchlists.map((item) => (
+                <option key={item.value} value={item.value}>
+                  {getWatchlistLabel(language, item.label)}
+                </option>
+              ))}
+            </select>
+          </label>
+          <div className="settings-grid">
+            <label className="settings-field">
+              <span>{t(language, "market")}</span>
+              <select
+                value={botSettings.marketType}
+                onChange={(event) =>
+                  updateBotSetting(
+                    "marketType",
+                    event.target.value as MarketType,
+                  )
+                }
+              >
+                <option value="spot">
+                  {language === "zh" ? "现货" : "Spot"}
+                </option>
+                <option value="futures">
+                  {language === "zh" ? "合约" : "Futures"}
+                </option>
+              </select>
+            </label>
+            <label className="settings-field">
+              <span>{t(language, "strategy")}</span>
+              <select
+                value={botSettings.strategyType}
+                onChange={(event) =>
+                  updateBotSetting(
+                    "strategyType",
+                    event.target.value as StrategyType,
+                  )
+                }
+              >
+                {strategyOptions.map((strategy) => (
+                  <option key={strategy.value} value={strategy.value}>
+                    {getStrategyLabel(language, strategy.value)}
+                  </option>
+                ))}
+              </select>
+            </label>
+          </div>
+        </article>
+
+        <article className="settings-card">
+          <div className="settings-card-heading">
+            <strong>{language === "zh" ? "数据连接" : "Data connections"}</strong>
+            <span>{language === "zh" ? "当前会话状态" : "Current session status"}</span>
+          </div>
+          <div className="connection-row">
+            <span className={`connection-dot ${source === "live" ? "online" : "warning"}`} />
+            <div>
+              <strong>{language === "zh" ? "市场行情" : "Market feed"}</strong>
+              <small>
+                {source === "live"
+                  ? language === "zh"
+                    ? "Binance 实时数据"
+                    : "Binance live data"
+                  : language === "zh"
+                    ? "演示数据"
+                    : "Demo data"}
+              </small>
+            </div>
+            <span>{radarState}</span>
+          </div>
+          <div className="connection-row">
+            <span className={`connection-dot ${chartState === "Ready" ? "online" : "warning"}`} />
+            <div>
+              <strong>{language === "zh" ? "K 线数据" : "Kline feed"}</strong>
+              <small>{chartSymbol ? formatSymbol(chartSymbol) : "--"}</small>
+            </div>
+            <span>{chartState}</span>
+          </div>
+          <div className="connection-row">
+            <span className={`connection-dot ${newsState === "Ready" ? "online" : "warning"}`} />
+            <div>
+              <strong>{language === "zh" ? "新闻情绪" : "News sentiment"}</strong>
+              <small>
+                {newsSentiment?.source === "news"
+                  ? language === "zh"
+                    ? "新闻数据源"
+                    : "News source"
+                  : language === "zh"
+                    ? "市场备用模型"
+                    : "Market fallback"}
+              </small>
+            </div>
+            <span>{newsState}</span>
+          </div>
+        </article>
+
+        <article className="product-card">
+          <img src={iconUrl} alt="" />
+          <div>
+            <strong>SignalForge AI</strong>
+            <span>Version 0.1.0</span>
+          </div>
+          <span className="badge simulation">
+            {language === "zh" ? "仅模拟" : "Paper only"}
+          </span>
+        </article>
+      </section>
+
+      <footer className="footnote" hidden={activePage !== "radar"}>
         {t(language, "researchFootnote")}{" "}
         {source === "demo" ? t(language, "demoDataActive") : ""}
       </footer>
+      </div>
+
+      <nav className="bottom-navigation" aria-label="Primary navigation">
+        {(["radar", "trade", "research", "settings"] as AppPage[]).map(
+          (page) => (
+            <button
+              key={page}
+              type="button"
+              className={activePage === page ? "active" : ""}
+              aria-current={activePage === page ? "page" : undefined}
+              onClick={() => setActivePage(page)}
+            >
+              <span className="nav-mark" aria-hidden="true">
+                {page === "radar"
+                  ? "01"
+                  : page === "trade"
+                    ? "02"
+                    : page === "research"
+                      ? "03"
+                      : "04"}
+              </span>
+              <span>{getPageLabel(language, page)}</span>
+            </button>
+          ),
+        )}
+      </nav>
     </main>
   );
 }

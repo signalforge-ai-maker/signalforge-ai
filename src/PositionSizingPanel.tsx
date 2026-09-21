@@ -1,21 +1,71 @@
-import { useMemo, useState } from "react";
+import { useMemo } from "react"
 
-import { formatPrice, formatSymbol } from "./market";
-import type { Language } from "./i18n";
+import type { Language } from "./i18n"
+import { formatPrice, formatSymbol } from "./market"
 
 type PositionSizingPanelProps = {
-  language: Language;
-  symbol: string;
-  equity: number;
-  entryPrice: number;
-  stopLossPrice: number;
-  maxPositionPercent: number;
-};
+  language: Language
+  symbol: string
+  equity: number
+  entryPrice: number
+  stopLossPrice: number
+  maxPositionPercent: number
+  riskPercent: number
+  onRiskPercentChange: (value: number) => void
+}
+
+export type PositionSizingResult = {
+  riskAmount: number
+  quantity: number
+  positionValue: number
+  positionPercent: number
+  isBlocked: boolean
+}
 
 function formatUsd(value: number) {
   return value.toLocaleString("en-US", {
-    maximumFractionDigits: 2,
-  });
+    maximumFractionDigits: 2
+  })
+}
+
+export function calculatePositionSize(
+  equity: number,
+  entryPrice: number,
+  stopLossPrice: number,
+  riskPercent: number,
+  maxPositionPercent: number
+): PositionSizingResult {
+  const safeEquity = Math.max(0, equity)
+  const safeRiskPercent = Math.max(0, riskPercent)
+  const riskAmount = safeEquity * (safeRiskPercent / 100)
+  const riskPerUnit = Math.abs(entryPrice - stopLossPrice)
+
+  if (
+    safeEquity === 0 ||
+    entryPrice <= 0 ||
+    stopLossPrice <= 0 ||
+    riskPerUnit === 0
+  ) {
+    return {
+      riskAmount,
+      quantity: 0,
+      positionValue: 0,
+      positionPercent: 0,
+      isBlocked: false
+    }
+  }
+
+  const quantity = riskAmount / riskPerUnit
+  const positionValue = quantity * entryPrice
+  const positionPercent = (positionValue / safeEquity) * 100
+
+  return {
+    riskAmount,
+    quantity,
+    positionValue,
+    positionPercent,
+    isBlocked: positionPercent > maxPositionPercent
+  }
 }
 
 export function PositionSizingPanel({
@@ -25,40 +75,32 @@ export function PositionSizingPanel({
   entryPrice,
   stopLossPrice,
   maxPositionPercent,
+  riskPercent,
+  onRiskPercentChange
 }: PositionSizingPanelProps) {
-  const [riskPercent, setRiskPercent] = useState(1);
-
-  const result = useMemo(() => {
-    const riskAmount = equity * (riskPercent / 100);
-    const riskPerUnit = Math.abs(entryPrice - stopLossPrice);
-
-    if (!equity || !entryPrice || !stopLossPrice || riskPerUnit === 0) {
-      return {
-        quantity: 0,
-        positionValue: 0,
-        positionPercent: 0,
-        riskAmount,
-        isBlocked: false,
-      };
-    }
-
-    const quantity = riskAmount / riskPerUnit;
-    const positionValue = quantity * entryPrice;
-    const positionPercent = (positionValue / equity) * 100;
-
-    return {
-      quantity,
-      positionValue,
-      positionPercent,
-      riskAmount,
-      isBlocked: positionPercent > maxPositionPercent,
-    };
-  }, [equity, entryPrice, stopLossPrice, riskPercent, maxPositionPercent]);
+  const result = useMemo(
+    () =>
+      calculatePositionSize(
+        equity,
+        entryPrice,
+        stopLossPrice,
+        riskPercent,
+        maxPositionPercent
+      ),
+    [
+      equity,
+      entryPrice,
+      stopLossPrice,
+      riskPercent,
+      maxPositionPercent
+    ]
+  )
 
   return (
     <section>
       <div className="section-heading">
         <h2>{language === "zh" ? "仓位计算器" : "Position sizing"}</h2>
+
         <span className={`status-pill ${result.isBlocked ? "high" : "low"}`}>
           {result.isBlocked
             ? language === "zh"
@@ -94,14 +136,19 @@ export function PositionSizingPanel({
         </div>
 
         <label className="position-risk-input">
-          <span>{language === "zh" ? "单笔风险 %" : "Risk per trade %"}</span>
+          <span>
+            {language === "zh" ? "单笔风险 %" : "Risk per trade %"}
+          </span>
+
           <input
             min="0.1"
             max="10"
             step="0.1"
             type="number"
             value={riskPercent}
-            onChange={(event) => setRiskPercent(Number(event.target.value))}
+            onChange={(event) =>
+              onRiskPercentChange(Number(event.target.value))
+            }
           />
         </label>
 
@@ -123,7 +170,10 @@ export function PositionSizingPanel({
 
           <div>
             <span>{language === "zh" ? "仓位占比" : "Position size"}</span>
-            <strong className={result.isBlocked ? "change down" : "change up"}>
+
+            <strong
+              className={result.isBlocked ? "change down" : "change up"}
+            >
               {result.positionPercent.toFixed(2)}%
             </strong>
           </div>
@@ -132,13 +182,13 @@ export function PositionSizingPanel({
         <div className="position-sizing-note">
           {result.isBlocked
             ? language === "zh"
-              ? `建议仓位超过最大仓位 ${maxPositionPercent}%，应降低单笔风险或扩大止损距离。`
-              : `Suggested size exceeds the ${maxPositionPercent}% max position limit. Reduce risk or widen the stop distance.`
+              ? `建议仓位超过最大仓位 ${maxPositionPercent}%，请降低单笔风险。`
+              : `Suggested size exceeds the ${maxPositionPercent}% position limit. Reduce the risk per trade.`
             : language === "zh"
-              ? `按当前止损距离计算，这笔交易最多风险约 $${formatUsd(result.riskAmount)}。`
-              : `Based on the current stop distance, this trade risks about $${formatUsd(result.riskAmount)}.`}
+              ? `如果价格触发止损，预计最多亏损 $${formatUsd(result.riskAmount)}。`
+              : `If the stop is triggered, the estimated loss is $${formatUsd(result.riskAmount)}.`}
         </div>
       </article>
     </section>
-  );
+  )
 }
