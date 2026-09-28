@@ -2,6 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import iconUrl from "data-base64:~../assets/icon-48.png";
 
+import { StrategyParametersPanel } from "~src/StrategyParametersPanel";
+
+import {
+  defaultStrategyParameters,
+  getStrategyExecutionProfile,
+  mergeStrategyParameters,
+  updateStrategyParameter,
+  type StrategyParameters,
+} from "~src/strategyParameters";
+
 import {
   calculatePositionSize,
   PositionSizingPanel,
@@ -115,6 +125,7 @@ type PersistedBotState = {
   paperCash: number;
   paperPosition: PaperPosition | null;
   orderHistory: OrderEvent[];
+  strategyParameters: StrategyParameters;
 };
 
 const STORAGE_KEY = "signalforge.paperBotState";
@@ -607,6 +618,8 @@ function Popup() {
     takeProfitPercent: 4.5,
     autoPaperTrading: false,
   });
+  const [strategyParameters, setStrategyParameters] =
+    useState<StrategyParameters>(defaultStrategyParameters);
   const [riskSettings, setRiskSettings] = useState<RiskSettings>({
     dailyMaxLossPercent: 3,
     maxPositionPercent: 10,
@@ -676,6 +689,11 @@ function Popup() {
           strategyType: normalizeStrategyType(saved.botSettings?.strategyType),
         }));
       }
+      if (saved?.strategyParameters) {
+        setStrategyParameters(
+          mergeStrategyParameters(saved.strategyParameters),
+        );
+      }
       if (saved?.riskSettings) {
         setRiskSettings((settings) => ({
           ...settings,
@@ -702,6 +720,7 @@ function Popup() {
       tradeTarget,
       klineInterval,
       botSettings,
+      strategyParameters,
       riskSettings,
       paperCash,
       paperPosition,
@@ -718,18 +737,37 @@ function Popup() {
     paperPosition,
     riskSettings,
     storageReady,
+    strategyParameters,
     tradeTarget,
     watchlist,
   ]);
 
+  const strategyExecutionProfile = useMemo(
+    () =>
+      getStrategyExecutionProfile(
+        strategyParameters,
+        botSettings.strategyType,
+        paperCash,
+        botSettings.orderSizePercent,
+      ),
+    [
+      botSettings.orderSizePercent,
+      botSettings.strategyType,
+      paperCash,
+      strategyParameters,
+    ],
+  );
+
   const configuredBotPlan = useMemo(() => {
     if (!botPlan) return undefined;
+    const sentimentWeight =
+      strategyParameters["ai-signal"].sentimentWeightPercent / 100;
     const sentimentBoost =
       botSettings.strategyType === "ai-signal" && newsSentiment
-        ? Math.round(newsSentiment.score / 5)
+        ? Math.round(newsSentiment.score * sentimentWeight)
         : 0;
     const confidence = clamp(botPlan.confidence + sentimentBoost, 0, 100);
-    const action =
+    let action =
       botSettings.strategyType === "ai-signal" &&
       newsSentiment?.label === "Negative" &&
       newsSentiment.score <= -35
@@ -740,17 +778,33 @@ function Popup() {
         ? `${botPlan.rationale} News sentiment is ${newsSentiment.label.toLowerCase()} (${newsSentiment.score}).`
         : botPlan.rationale;
 
+    if (
+      action === "paper-long" &&
+      confidence < strategyExecutionProfile.minimumConfidence
+    ) {
+      action = "watch";
+    }
+
     return {
       ...botPlan,
       action,
       confidence,
       rationale,
-      allocationPercent: botSettings.orderSizePercent,
+      allocationPercent:
+        action === "paper-long"
+          ? strategyExecutionProfile.allocationPercent
+          : 0,
       stopLoss: botPlan.entryPrice * (1 - botSettings.stopLossPercent / 100),
       takeProfit:
         botPlan.entryPrice * (1 + botSettings.takeProfitPercent / 100),
     };
-  }, [botPlan, botSettings, newsSentiment]);
+  }, [
+    botPlan,
+    botSettings,
+    newsSentiment,
+    strategyExecutionProfile,
+    strategyParameters,
+  ]);
 
   const currentPositionRow = paperPosition
     ? rows.find((row) => row.symbol === paperPosition.symbol)
@@ -916,6 +970,24 @@ function Popup() {
     },
     [],
   );
+
+  const handleStrategyParameterChange = useCallback(
+    (strategy: StrategyType, key: string, value: number) => {
+      setStrategyParameters((current) =>
+        updateStrategyParameter(current, strategy, key, value),
+      );
+    },
+    [],
+  );
+
+  const resetStrategyParameters = useCallback((strategy: StrategyType) => {
+    setStrategyParameters((current) => ({
+      ...current,
+      [strategy]: {
+        ...defaultStrategyParameters[strategy],
+      },
+    }));
+  }, []);
 
   const updateRiskSetting = useCallback(
     (key: keyof RiskSettings, value: number | ExecutionMode) => {
@@ -1296,6 +1368,16 @@ function Popup() {
           </div>
         </div>
       </section>
+
+      {activePage === "trade" ? (
+        <StrategyParametersPanel
+          language={language}
+          strategy={botSettings.strategyType}
+          parameters={strategyParameters}
+          onChange={handleStrategyParameterChange}
+          onReset={resetStrategyParameters}
+        />
+      ) : null}
 
       <section className="signal-panel" hidden={activePage !== "radar"}>
         <div className="section-heading">

@@ -1617,3 +1617,77 @@ h2 {
 .product-card > div {
   flex: 1;
 }
+
+.strategy-parameters-card {
+  display: grid;
+  gap: 10px;
+  padding: 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+}
+
+.strategy-parameters-note {
+  color: var(--muted);
+  font-size: 11px;
+  line-height: 1.45;
+}
+
+.strategy-parameters-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+}
+
+.strategy-parameters-grid label {
+  display: grid;
+  gap: 5px;
+  min-width: 0;
+}
+
+.strategy-parameters-grid label > span {
+  color: var(--muted);
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.parameter-input {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-height: 34px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-strong);
+}
+
+.parameter-input:focus-within {
+  border-color: rgba(61, 242, 230, 0.72);
+}
+
+.parameter-input input {
+  width: 100%;
+  min-width: 0;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font-weight: 800;
+}
+
+.parameter-input small {
+  color: var(--muted);
+  font-size: 9px;
+  white-space: nowrap;
+}
+
+.text-button {
+  padding: 4px 6px;
+  border: 0;
+  background: transparent;
+  color: var(--cyan);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+}
